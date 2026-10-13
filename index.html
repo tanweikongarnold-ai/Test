@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Big Board</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Stencil+Display:wght@500;700;800&family=Courier+Prime:wght@400;700&family=IBM+Plex+Sans+Condensed:wght@400;500;600&display=swap">
+<style>
+/* Layout: full-bleed 3D war room; instrument panels pinned to the edges like consoles around the plotting table. */
+:root {
+  --bg: #070a08;
+  --panel: rgba(16, 21, 18, 0.9);
+  --panel-solid: #121814;
+  --raised: #1d2620;
+  --rule: #34423a;
+  --paper: #e9e1c8;
+  --dim: #98a18e;
+  --amber: #f0a830;
+  --red: #e5513f;
+  --blue: #86c3ee;
+  --green: #86e08f;
+  --f-display: "Big Shoulders Stencil Display", "Arial Narrow", Impact, sans-serif;
+  --f-ui: "IBM Plex Sans Condensed", "Arial Narrow", "Helvetica Neue", sans-serif;
+  --f-type: "Courier Prime", "Courier New", Courier, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; margin: 0; overflow: hidden; background: var(--bg); color: var(--paper); font: 14px/1.4 var(--f-ui); }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+#app { position: fixed; inset: 0; }
+#view { position: absolute; inset: 0; }
+#view canvas { display: block; touch-action: none; }
+#labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.lbl { position: absolute; left: 0; top: 0; white-space: nowrap; font: 600 11px/1 var(--f-ui); letter-spacing: 0.04em; text-transform: uppercase;
+  padding: 2px 4px; border-radius: 2px; background: rgba(6, 9, 7, 0.72); color: var(--paper); will-change: transform; }
+.lbl.us { color: var(--blue); } .lbl.su { color: #ff9b86; } .lbl.city { color: #f3d58c; } .lbl.dead { color: #776; text-decoration: line-through; }
+.lbl.unit { font-size: 10px; } .lbl.obj { background: none; color: var(--paper); font: 700 12px/1 var(--f-display); letter-spacing: 0.12em; }
+.lbl.sel { outline: 1px solid var(--amber); }
+
+.panel { position: absolute; background: var(--panel); border: 1px solid var(--rule); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.eyebrow { font: 600 10px/1.2 var(--f-ui); letter-spacing: 0.18em; text-transform: uppercase; color: var(--dim); }
+
+/* top bar */
+#topbar { top: 0; left: 0; right: 0; display: flex; align-items: center; gap: 18px; padding: calc(8px + env(safe-area-inset-top, 0px)) 16px 8px; border-width: 0 0 1px; flex-wrap: wrap; }
+#topbar h1 { margin: 0; font: 800 26px/1 var(--f-display); letter-spacing: 0.08em; text-transform: uppercase; color: var(--paper); }
+.clock { font: 700 13px/1.2 var(--f-type); font-variant-numeric: tabular-nums; }
+.clock .big { font-size: 20px; color: var(--amber); }
+#defcon { border: 2px solid currentColor; background: #0005; padding: 4px 12px; font: 800 20px/1 var(--f-display); letter-spacing: 0.12em; }
+#defcon.d3 { color: #e8d35a; } #defcon.d2 { color: var(--amber); } #defcon.d1 { color: var(--red); animation: pulse 1s infinite alternate; }
+@keyframes pulse { to { background: rgba(229, 81, 63, 0.25); } }
+.stats { display: flex; gap: 18px; margin-left: auto; flex-wrap: wrap; }
+.stat { display: grid; gap: 2px; }
+.stat b { font: 700 18px/1 var(--f-type); font-variant-numeric: tabular-nums; }
+.stat b.warn { color: var(--amber); } .stat b.bad { color: var(--red); } .stat b.good { color: var(--green); }
+.speed { display: flex; gap: 4px; }
+.speed button, .chip { background: var(--raised); border: 1px solid var(--rule); padding: 5px 9px; font: 600 12px/1 var(--f-ui); letter-spacing: 0.06em; }
+.speed button[aria-pressed="true"], .chip[aria-pressed="true"] { background: var(--amber); color: #111; border-color: var(--amber); }
+
+/* side panels */
+#left { top: 74px; left: 12px; width: 286px; bottom: 182px; display: flex; flex-direction: column; }
+.tabs { display: grid; grid-template-columns: repeat(3, 1fr); border-bottom: 1px solid var(--rule); }
+.tabs button { background: none; border: 0; padding: 9px 4px; font: 700 13px/1 var(--f-display); letter-spacing: 0.1em; color: var(--dim); border-bottom: 2px solid transparent; }
+.tabs button[aria-selected="true"] { color: var(--amber); border-bottom-color: var(--amber); }
+#list { overflow-y: auto; padding: 6px; flex: 1; }
+.row { display: grid; grid-template-columns: 10px 1fr auto; gap: 8px; align-items: center; width: 100%; text-align: left; background: none; border: 0; border-bottom: 1px solid #ffffff0d; padding: 6px 6px; }
+.row:hover { background: #ffffff0a; }
+.row .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--blue); }
+.row .dot.su { background: var(--red); } .row .dot.city { background: #f3d58c; } .row .dot.dead { background: #444; }
+.row .n { font-weight: 600; font-size: 13px; } .row .s { font-size: 11px; color: var(--dim); }
+.row .v { font: 700 12px var(--f-type); font-variant-numeric: tabular-nums; color: var(--paper); }
+.list-h { margin: 10px 6px 4px; }
+.list-actions { display: grid; gap: 6px; padding: 6px; }
+
+#right { top: 74px; right: 12px; width: 330px; max-height: calc(100% - 270px); overflow-y: auto; padding: 14px; }
+#right h2 { margin: 2px 0 2px; font: 800 24px/1.05 var(--f-display); letter-spacing: 0.04em; text-transform: uppercase; text-wrap: balance; }
+#right .sub { color: var(--dim); margin-bottom: 10px; }
+.kv { display: grid; grid-template-columns: 1fr auto; gap: 3px 10px; margin: 8px 0; font-size: 13px; }
+.kv span { color: var(--dim); } .kv b { font: 700 13px var(--f-type); text-align: right; font-variant-numeric: tabular-nums; }
+.meter { height: 6px; background: #ffffff14; margin: 4px 0 10px; }
+.meter i { display: block; height: 100%; background: var(--green); }
+.act { display: grid; gap: 6px; margin-top: 10px; }
+.btn { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; text-align: left; background: var(--raised); border: 1px solid var(--rule); padding: 8px 10px; font-size: 13px; }
+.btn:hover:not(:disabled) { border-color: var(--amber); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn small { display: block; color: var(--dim); font-size: 11px; }
+.btn em { font: 700 12px var(--f-type); font-style: normal; color: var(--amber); }
+.btn.fire { border-color: #7a2a20; background: #3a1712; }
+.btn.fire em { color: #ffb4a5; }
+.hint { font-size: 12px; color: var(--dim); border-left: 2px solid var(--amber); padding: 4px 8px; margin: 10px 0; }
+.close { float: right; background: none; border: 1px solid var(--rule); padding: 2px 8px; }
+
+/* teletype */
+#teletype { left: 12px; bottom: 12px; width: min(640px, calc(100% - 380px)); height: 160px; padding: 24px 12px 8px; overflow: hidden;
+  font: 13px/1.45 var(--f-type); background: rgba(232, 224, 200, 0.94); color: #1f1a12; border-color: #b9ad8a; display: flex; flex-direction: column; justify-content: flex-end; }
+#teletype .line { white-space: pre-wrap; animation: type 0.25s ease-out; }
+#teletype .t { color: #6b5f48; margin-right: 8px; }
+#teletype .red { color: #9a1f12; font-weight: 700; } #teletype .good { color: #1d5b26; font-weight: 700; } #teletype .warn { color: #8a5200; }
+#teletype .us { color: #1b3f63; } #teletype .dim { color: #7b725f; }
+@keyframes type { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+#teletype::before { content: "TELETYPE · NATIONAL MILITARY COMMAND CENTER"; position: absolute; top: 0; left: 0; right: 0; z-index: 1; padding: 0 12px; background: #b9ad8a; color: #1f1a12; font: 700 10px/18px var(--f-ui); letter-spacing: 0.16em; }
+#teletype .line:first-child { opacity: 0.45; }
+
+#theaters { right: 12px; bottom: 12px; display: flex; gap: 4px; padding: 6px; flex-wrap: wrap; justify-content: flex-end; }
+#theaters .chip { font: 700 13px/1 var(--f-display); letter-spacing: 0.12em; padding: 7px 11px; }
+#banner { position: absolute; top: 80px; left: 50%; transform: translateX(-50%); font: 800 22px/1 var(--f-display); letter-spacing: 0.18em; color: var(--red);
+  background: rgba(30, 6, 4, 0.85); border: 2px solid var(--red); padding: 8px 18px; pointer-events: none; animation: pulse 0.6s infinite alternate; }
+#toast { position: absolute; bottom: 186px; left: 50%; transform: translateX(-50%); background: var(--panel-solid); border: 1px solid var(--amber); padding: 8px 14px; max-width: min(520px, calc(100% - 32px)); font-size: 13px; }
+#moveHint { position: absolute; top: 80px; left: 50%; transform: translateX(-50%); background: var(--panel-solid); border: 1px solid var(--blue); padding: 6px 12px; font-size: 12px; color: var(--blue); pointer-events: none; }
+#forcesBtn { display: none; }
+
+/* modals */
+#modal { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(3, 5, 4, 0.72); padding: 16px; overflow-y: auto; }
+.dossier { position: relative; width: min(860px, 100%); background: #e7dfc4; color: #221d14; padding: clamp(18px, 4vw, 40px); box-shadow: 0 30px 80px #000c;
+  font: 15px/1.55 var(--f-type); border: 1px solid #b6a983; max-height: calc(100% - 8px); overflow-y: auto; }
+.dossier .stamp { display: inline-block; border: 3px solid #a3241a; color: #a3241a; padding: 2px 10px; font: 800 18px/1.2 var(--f-display); letter-spacing: 0.2em; transform: rotate(-3deg); }
+.dossier h1 { font: 800 clamp(44px, 9vw, 86px)/0.9 var(--f-display); letter-spacing: 0.04em; text-transform: uppercase; margin: 14px 0 6px; color: #1b1710; }
+.dossier h3 { font: 700 18px/1.1 var(--f-display); letter-spacing: 0.12em; text-transform: uppercase; margin: 0 0 4px; color: #3b2f1c; }
+.dossier p { max-width: 66ch; margin: 8px 0; }
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px; margin: 18px 0; }
+.cols > div { border-top: 2px solid #3b2f1c; padding-top: 8px; font-size: 14px; min-width: 0; }
+.mapopt { border: 1px dashed #8b7d58; padding: 12px; margin: 16px 0; display: grid; gap: 8px; font-size: 14px; }
+.mapopt label { display: flex; gap: 8px; align-items: baseline; }
+.mapopt input[type=text], .mapopt input[type=password] { font: 14px var(--f-type); padding: 6px 8px; border: 1px solid #8b7d58; background: #f4eedb; color: #221d14; width: 100%; }
+.mapopt small { color: #5e5440; }
+.go { background: #1b1710; color: #e7dfc4; border: 0; padding: 14px 26px; font: 800 22px/1 var(--f-display); letter-spacing: 0.16em; text-transform: uppercase; }
+.go:hover { background: #a3241a; }
+.go.alt { background: none; color: #1b1710; border: 2px solid #1b1710; }
+.score { display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; max-width: 640px; margin: 14px 0; font-variant-numeric: tabular-nums; }
+.score b { text-align: right; } .score .tot { border-top: 2px solid #1b1710; padding-top: 4px; font-weight: 700; }
+.rank { font: 800 30px/1.1 var(--f-display); letter-spacing: 0.06em; text-transform: uppercase; color: #a3241a; }
+.keys { font-size: 13px; color: #5e5440; }
+#loading { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font: 700 14px var(--f-type); color: var(--dim); }
+
+@media (max-width: 860px) {
+  #topbar { gap: 8px 12px; padding-inline: 10px; }
+  #topbar h1 { font-size: 20px; }
+  .brand .eyebrow { display: none; }
+  .stats { gap: 10px; margin-left: 0; width: 100%; justify-content: space-between; }
+  .stat span { font-size: 9px; }
+  .stat b { font-size: 14px; }
+  #defcon { font-size: 16px; }
+  #forcesBtn { display: inline-block; }
+  #left { display: none; top: auto; bottom: 0; left: 0; right: 0; width: auto; height: 55%; z-index: 3; }
+  #left.open { display: flex; }
+  #right { top: auto; bottom: 0; left: 0; right: 0; width: auto; max-height: 52%; z-index: 4; }
+  #teletype { left: 8px; right: 8px; width: auto; bottom: 52px; height: 84px; font-size: 11px; }
+  #theaters { left: 8px; right: 8px; bottom: 6px; justify-content: center; }
+  #theaters .chip { padding: 6px 8px; font-size: 12px; }
+  #toast { bottom: 150px; }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before { animation: none !important; } }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="view"></div>
+  <div id="labels" aria-hidden="true"></div>
+  <div id="loading">Unlocking the war room…</div>
+
+  <header id="topbar" class="panel" hidden>
+    <div class="brand"><div class="eyebrow">Joint War Room · The Pentagon</div><h1>The Big Board</h1></div>
+    <div class="clock"><div id="date">MON 22 OCT 1962</div><div><span id="time" class="big">0600</span> EST · <span id="day">DAY 1/13</span></div></div>
+    <button id="defcon" class="d3" title="Raise to DEFCON 1 to authorize weapons release">DEFCON 3</button>
+    <div class="stats">
+      <div class="stat"><span class="eyebrow">Budget</span><b id="budget">$40.0B</b></div>
+      <div class="stat"><span class="eyebrow">US casualties</span><b id="cas">0</b></div>
+      <div class="stat"><span class="eyebrow">Soviet strike power</span><b id="cap">100%</b></div>
+      <div class="stat"><span class="eyebrow">NATO cities held</span><b id="held">6/6</b></div>
+    </div>
+    <div class="speed" role="group" aria-label="Game speed">
+      <button id="forcesBtn" aria-expanded="false">Forces</button>
+      <button data-speed="0" title="Pause (Space)">II</button>
+      <button data-speed="1" aria-pressed="true">1×</button>
+      <button data-speed="2">2×</button>
+      <button data-speed="4">4×</button>
+      <button id="mute" title="Sound on/off">Sound</button>
+    </div>
+  </header>
+
+  <aside id="left" class="panel" hidden>
+    <div class="tabs" role="tablist">
+      <button role="tab" data-tab="strategic" aria-selected="true">Strike</button>
+      <button role="tab" data-tab="ground" aria-selected="false">Ground</button>
+      <button role="tab" data-tab="home" aria-selected="false">Home Front</button>
+    </div>
+    <div id="list"></div>
+  </aside>
+
+  <aside id="right" class="panel" hidden></aside>
+  <div id="teletype" class="panel" hidden></div>
+  <nav id="theaters" class="panel" aria-label="Theaters" hidden>
+    <button class="chip" data-cam="world">World</button>
+    <button class="chip" data-cam="usa">USA</button>
+    <button class="chip" data-cam="cuba">Cuba</button>
+    <button class="chip" data-cam="europe">Europe</button>
+    <button class="chip" data-cam="ussr">USSR</button>
+  </nav>
+  <div id="banner" hidden></div>
+  <div id="moveHint" hidden></div>
+  <div id="toast" role="status" hidden></div>
+  <div id="modal" hidden></div>
+</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
